@@ -1,0 +1,81 @@
+// Cas Fil Rouge — mesures DAX réellement utilisées dans le modèle
+// Extraites directement du fichier .pbix (table `Mesure`)
+
+// ---------- Ventes & Marge ----------
+
+Ventes (€) =
+SUM(FactFacturation[Prix_Vente_€])
+
+Marge (€) =
+SUM(FactFacturation[Marge_Commerciale_€])
+
+Marge (%) =
+DIVIDE([Marge (€)], [Ventes (€)])
+
+// Cible du KPI. Doit devenir BLANK() exactement quand Ventes (€) l'est,
+// sinon le KPI plante (Valeur vide + Cible remplie sur le même point).
+Objectif Marge (%) =
+IF(
+    ISBLANK([Ventes (€)]),
+    BLANK(),
+    0.2
+)
+
+// ---------- Poids ----------
+
+Poids total (kg) =
+SUM(FactFacturation[Poids_kg])
+
+Poids métal (kg) =
+SUM(FactFacturation[Poids_Cuivre_kg]) + SUM(FactFacturation[Poids_Aluminium_kg])
+
+Poids métal (ton) =
+[Poids métal (kg)] / 1000
+
+Poids autres composants (%) =
+DIVIDE([Poids total (kg)] - [Poids métal (kg)], [Poids total (kg)])
+
+// ---------- Pareto — par groupement client ----------
+
+// Classe chaque Groupement Client par marge décroissante (RANKX), puis
+// additionne la marge des N premiers (TOPN) : c'est la courbe cumulée du Pareto.
+// ALLSELECTED (pas ALL) garantit la réactivité aux slicers.
+MargeCumulee =
+VAR RangActuel =
+    RANKX(
+        ALLSELECTED(DimClients[Client_Groupement]),
+        CALCULATE([Marge (€)])
+    )
+RETURN
+CALCULATE(
+    [Marge (€)],
+    TOPN(
+        RangActuel,
+        ALLSELECTED(DimClients[Client_Groupement]),
+        CALCULATE([Marge (€)]),
+        DESC
+    )
+)
+
+MargeCumuleePourcent =
+DIVIDE(
+    [MargeCumulee],
+    CALCULATE([Marge (€)], ALLSELECTED(DimClients[Client_Groupement]))
+)
+
+// ---------- Pareto — par produit (bonus) ----------
+
+MargeCumuleeProduit =
+VAR RangActuel =
+    RANKX(ALLSELECTED(DimProduits[Produit_Complet]), CALCULATE([Marge (€)]))
+RETURN
+CALCULATE(
+    [Marge (€)],
+    TOPN(RangActuel, ALLSELECTED(DimProduits[Produit_Complet]), CALCULATE([Marge (€)]), DESC)
+)
+
+MargeCumuleePourcentProduit =
+DIVIDE(
+    [MargeCumuleeProduit],
+    CALCULATE([Marge (€)], ALLSELECTED(DimProduits[Produit_Complet]))
+)
